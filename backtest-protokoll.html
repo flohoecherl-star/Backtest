@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backtest-Protokoll</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F6F2EA;
+  --paper-raised:#FBF8F2;
+  --ink:#2A2621;
+  --ink-soft:#6B6459;
+  --line:#DCD3C4;
+  --green:#4A6B4E;
+  --green-soft:#E4EBE1;
+  --gold:#AD8A2E;
+  --gold-soft:#F1E8D3;
+  --coral:#B85C46;
+  --coral-soft:#F3E0D9;
+  --seal:#8A2E2E;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Inter',sans-serif;
+  min-height:100vh;
+  padding-bottom:60px;
+  font-variant-numeric:tabular-nums;
+}
+::selection{background:var(--gold-soft);}
+.wrap{max-width:1040px;margin:0 auto;padding:32px 20px 0;}
+
+header.top{
+  border-bottom:2px solid var(--ink);
+  padding-bottom:0;margin-bottom:28px;
+}
+header.top .row{
+  display:flex;justify-content:space-between;align-items:flex-end;
+  padding-bottom:18px;flex-wrap:wrap;gap:12px;
+}
+header.top .ticks{
+  height:3px;
+  background-image:repeating-linear-gradient(90deg, var(--line) 0, var(--line) 1px, transparent 1px, transparent 10px);
+  opacity:0.4;
+}
+header.top h1{
+  font-family:'Fraunces',serif;font-weight:600;font-size:2rem;
+  letter-spacing:-0.01em;
+}
+header.top .sub{color:var(--ink-soft);font-size:0.85rem;margin-top:4px;}
+header.top .phase-badge{
+  font-family:'JetBrains Mono',monospace;font-size:0.72rem;
+  text-transform:uppercase;letter-spacing:0.08em;
+  background:var(--ink);color:var(--paper);
+  padding:6px 12px;border-radius:2px;
+}
+
+nav.tabs{
+  display:flex;gap:4px;margin-bottom:28px;
+  background:var(--paper-raised);
+  border:1px solid var(--line);
+  border-radius:4px;
+  padding:4px;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+nav.tabs::-webkit-scrollbar{display:none;}
+nav.tabs button{
+  font-family:'Inter',sans-serif;font-weight:600;font-size:0.82rem;
+  background:none;border:none;color:var(--ink-soft);
+  padding:9px 14px;cursor:pointer;border-radius:3px;
+  white-space:nowrap;flex:1 1 auto;
+  transition:all .15s;
+}
+nav.tabs button:hover{color:var(--ink);background:rgba(0,0,0,0.03);}
+nav.tabs button.active{color:var(--paper);background:var(--ink);}
+nav.tabs button:focus-visible,.btn:focus-visible,.del:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+
+.view{display:none;}
+.view.active{display:block;animation:fadein .2s ease;}
+@keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+/* ---- Phase gate cards ---- */
+.phase-grid{display:grid;grid-template-columns:1fr;gap:16px;}
+.phase-card{
+  background:var(--paper-raised);
+  border:1px solid var(--line);
+  border-left:4px solid var(--line);
+  border-radius:4px;
+  padding:22px 24px 22px 22px;
+  position:relative;
+  overflow:hidden;
+  transition:border-color .2s;
+}
+.phase-card.locked{border-left-color:var(--coral);}
+.phase-card.unlocked{border-left-color:var(--green);}
+.phase-card.current{border-left-color:var(--gold);}
+.phase-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;gap:14px;}
+.phase-num{font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--ink-soft);letter-spacing:0.1em;}
+.phase-title{font-family:'Fraunces',serif;font-size:1.3rem;font-weight:600;}
+.seal{
+  font-family:'JetBrains Mono',monospace;font-size:0.64rem;font-weight:700;
+  letter-spacing:0.14em;text-transform:uppercase;
+  padding:7px 12px;border-radius:1px;white-space:nowrap;
+  border-style:double;border-width:3px;
+  text-align:center;flex-shrink:0;
+  transform:rotate(-2deg);
+}
+.seal.locked{border-color:var(--seal);color:var(--seal);background:var(--coral-soft);}
+.seal.unlocked{border-color:var(--green);color:var(--green);background:var(--green-soft);}
+.phase-desc{color:var(--ink-soft);font-size:0.85rem;margin-bottom:14px;line-height:1.5;}
+.criteria{display:flex;flex-direction:column;gap:8px;margin-bottom:6px;}
+.criterion{
+  display:flex;flex-direction:column;gap:5px;
+  font-size:0.82rem;padding:9px 10px;border-radius:3px;
+  background:rgba(0,0,0,0.02);
+}
+.criterion .crit-row{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.criterion .status{font-family:'JetBrains Mono',monospace;font-size:0.72rem;font-weight:700;flex-shrink:0;}
+.criterion.met .status{color:var(--green);}
+.criterion.unmet .status{color:var(--coral);}
+.criterion .cur{color:var(--ink-soft);font-family:'JetBrains Mono',monospace;font-size:0.76rem;}
+.crit-bar{height:5px;border-radius:3px;background:var(--line);overflow:hidden;}
+.crit-bar-fill{height:100%;border-radius:3px;transition:width .3s ease;}
+.criterion.met .crit-bar-fill{background:var(--green);}
+.criterion.unmet .crit-bar-fill{background:var(--gold);}
+
+/* ---- Forms ---- */
+.card{background:var(--paper-raised);border:1px solid var(--line);border-radius:4px;padding:22px 24px;margin-bottom:20px;}
+.card h2{font-family:'Fraunces',serif;font-size:1.15rem;font-weight:600;margin-bottom:14px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+@media(max-width:640px){.grid2,.grid3{grid-template-columns:1fr;}}
+label{display:block;font-size:0.72rem;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;}
+input,select,textarea{
+  width:100%;background:var(--paper);border:1px solid var(--line);
+  border-radius:3px;padding:9px 10px;font-family:'Inter',sans-serif;
+  font-size:0.88rem;color:var(--ink);
+}
+textarea{resize:vertical;min-height:56px;}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--gold);outline-offset:1px;}
+.field{margin-bottom:14px;}
+.rr-checks{display:flex;flex-wrap:wrap;gap:8px;}
+.rr-check{
+  display:flex;align-items:center;gap:6px;
+  background:var(--paper);border:1px solid var(--line);border-radius:3px;
+  padding:7px 12px;font-size:0.82rem;font-weight:500;cursor:pointer;
+  text-transform:none;letter-spacing:normal;color:var(--ink);
+}
+.rr-check input{width:auto;accent-color:var(--green);}
+.btn{
+  font-family:'Inter',sans-serif;font-weight:600;font-size:0.85rem;
+  background:var(--ink);color:var(--paper);border:none;
+  padding:11px 20px;border-radius:3px;cursor:pointer;
+}
+.btn:hover{background:#000;}
+.btn.secondary{background:transparent;color:var(--ink);border:1px solid var(--ink);}
+.btn.small{padding:6px 12px;font-size:0.75rem;}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+/* ---- Trades table ---- */
+table{width:100%;border-collapse:collapse;font-size:0.8rem;}
+th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--ink);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);}
+td{padding:8px 10px;border-bottom:1px solid var(--line);}
+tr:hover td{background:rgba(0,0,0,0.015);}
+.tag{font-family:'JetBrains Mono',monospace;font-size:0.68rem;padding:2px 7px;border-radius:2px;}
+.tag.win{background:var(--green-soft);color:var(--green);}
+.tag.loss{background:var(--coral-soft);color:var(--coral);}
+.tag.be{background:var(--gold-soft);color:var(--gold);}
+.del{color:var(--coral);cursor:pointer;font-size:0.75rem;background:none;border:none;}
+
+/* ---- Stats ---- */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+@media(max-width:640px){.stat-grid{grid-template-columns:repeat(2,1fr);}}
+.stat-box{background:var(--paper-raised);border:1px solid var(--line);border-radius:4px;padding:14px 16px;}
+.stat-box .label{font-size:0.68rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);margin-bottom:4px;}
+.stat-box .val{font-family:'Fraunces',serif;font-size:1.5rem;font-weight:600;}
+.stat-box .val.pos{color:var(--green);}
+.stat-box .val.neg{color:var(--coral);}
+
+.breakdown-title{font-family:'Fraunces',serif;font-size:1rem;font-weight:600;margin:22px 0 10px;}
+.empty{color:var(--ink-soft);font-size:0.85rem;padding:20px 0;text-align:center;font-style:italic;}
+
+.setup-card{border:1px solid var(--line);border-radius:4px;padding:16px 18px;margin-bottom:12px;background:var(--paper-raised);}
+.setup-card h3{font-family:'Fraunces',serif;font-size:1rem;margin-bottom:6px;}
+.setup-card p{font-size:0.82rem;color:var(--ink-soft);line-height:1.5;}
+.setup-meta{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.setup-meta span{font-family:'JetBrains Mono',monospace;font-size:0.68rem;background:var(--gold-soft);color:var(--gold);padding:3px 8px;border-radius:2px;}
+
+.gate-note{
+  font-size:0.78rem;color:var(--ink-soft);background:var(--gold-soft);
+  border-left:3px solid var(--gold);padding:10px 12px;border-radius:2px;margin-top:10px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="row">
+      <div>
+        <h1>Backtest-Protokoll</h1>
+        <div class="sub">Vier Phasen. Jede Phase hat ein Tor. Kein Tor öffnet sich von selbst.</div>
+      </div>
+      <div class="phase-badge" id="currentPhaseBadge">PHASE 1 · BACKTEST</div>
+    </div>
+    <div class="ticks"></div>
+  </header>
+
+  <nav class="tabs">
+    <button data-view="phasen" class="active">Phasen</button>
+    <button data-view="setups">Setups</button>
+    <button data-view="trades">Trades</button>
+    <button data-view="auswertung">Auswertung</button>
+    <button data-view="walkforward">Walk-Forward</button>
+  </nav>
+
+  <!-- PHASEN -->
+  <section class="view active" id="view-phasen">
+    <div class="phase-grid" id="phaseGrid"></div>
+  </section>
+
+  <!-- SETUPS -->
+  <section class="view" id="view-setups">
+    <div class="card">
+      <h2>Neues Setup definieren</h2>
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="setupName" placeholder="z.B. Zero-Gamma Level RR 1:3+">
+      </div>
+      <div class="field">
+        <label>Beschreibung / Regeln</label>
+        <textarea id="setupDesc" placeholder="Entry-, Exit- und Bestätigungslogik"></textarea>
+      </div>
+      <button class="btn" onclick="addSetup()">Setup speichern</button>
+    </div>
+    <div id="setupList"></div>
+  </section>
+
+  <!-- TRADES -->
+  <section class="view" id="view-trades">
+    <div class="card">
+      <h2>Trade erfassen</h2>
+      <div class="grid3">
+        <div class="field">
+          <label>Datum</label>
+          <input type="date" id="t_date">
+        </div>
+        <div class="field">
+          <label>Phase</label>
+          <select id="t_phase">
+            <option value="backtest">1 · Backtest</option>
+            <option value="oos">2 · Out-of-Sample</option>
+            <option value="forward">3 · Forward-Sim</option>
+            <option value="live">4 · Live (Small Size)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Setup</label>
+          <select id="t_setup"></select>
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div class="field">
+          <label>GEX-Regime</label>
+          <select id="t_regime">
+            <option value="positive">Positiv (Mean-Reversion)</option>
+            <option value="negative">Negativ (Breakout)</option>
+            <option value="zero_gamma">Zero Gamma (Flip)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Level-Typ</label>
+          <input type="text" id="t_level" placeholder="HVL / Call Wall / Put Wall / Flip">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Erreichte RR-Level (Mehrfachauswahl — wie weit wäre der Trade gelaufen?)</label>
+        <div class="rr-checks" id="rrChecks">
+          <label class="rr-check"><input type="checkbox" value="1:1"> 1:1</label>
+          <label class="rr-check"><input type="checkbox" value="1:2"> 1:2</label>
+          <label class="rr-check"><input type="checkbox" value="1:3"> 1:3</label>
+          <label class="rr-check"><input type="checkbox" value="1:4"> 1:4</label>
+          <label class="rr-check"><input type="checkbox" value="1:5"> 1:5</label>
+          <label class="rr-check"><input type="checkbox" value="1:6+"> 1:6+</label>
+          <label class="rr-check"><input type="checkbox" value="runner"> Runner (offen getrailt)</label>
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div class="field">
+          <label>30-Min IVB Durchbruch bestätigt</label>
+          <select id="t_ivb_confirmed">
+            <option value="ja">Ja</option>
+            <option value="nein">Nein</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>IVB-Richtung</label>
+          <select id="t_ivb_dir">
+            <option value="long">Long</option>
+            <option value="short">Short</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Big-Trades Bestätigung</label>
+          <select id="t_bigtrades">
+            <option value="aggression">Aggression</option>
+            <option value="absorption">Absorption</option>
+            <option value="beide">Aggression + Absorption</option>
+            <option value="keine">Keine</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div class="field">
+          <label>Session</label>
+          <select id="t_session">
+            <option value="RTH">RTH</option>
+            <option value="Globex">Globex</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Setup-Qualität</label>
+          <select id="t_quality">
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Regel befolgt?</label>
+          <select id="t_adherence">
+            <option value="ja">Ja</option>
+            <option value="nein">Nein</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div class="field">
+          <label>Ergebnis</label>
+          <select id="t_result">
+            <option value="win">Win</option>
+            <option value="loss">Loss</option>
+            <option value="be">Breakeven</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>R-Multiple (z.B. 3 oder -1)</label>
+          <input type="number" step="0.1" id="t_rmult" placeholder="3">
+        </div>
+        <div class="field">
+          <label>MAE in R (max. gegen dich)</label>
+          <input type="number" step="0.1" id="t_mae" placeholder="0.6">
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div class="field">
+          <label>Entry-Uhrzeit</label>
+          <input type="time" id="t_entrytime">
+        </div>
+        <div class="field">
+          <label>Haltedauer (Min.)</label>
+          <input type="number" id="t_duration" placeholder="24">
+        </div>
+        <div class="field">
+          <label>Abstand Entry ↔ Level (Punkte)</label>
+          <input type="number" step="0.25" id="t_leveldist" placeholder="8">
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div class="field">
+          <label>Trade-Richtung vs. IVB</label>
+          <select id="t_ivb_align">
+            <option value="mit">Mit IVB-Richtung</option>
+            <option value="gegen">Gegen IVB-Richtung</option>
+            <option value="neutral">Kein IVB-Signal</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>SPX-Kontext</label>
+          <select id="t_spx">
+            <option value="bestaetigend">Bestätigend</option>
+            <option value="divergent">Divergent</option>
+            <option value="neutral">Neutral</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Psychologisches Muster</label>
+          <select id="t_psych">
+            <option value="keins">Keins</option>
+            <option value="angst_exit">Angst-Exit (zu früh raus)</option>
+            <option value="frustration">Frustration-Continuation</option>
+            <option value="loss_chasing">Loss-Chasing</option>
+            <option value="fomo">FOMO-Entry</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Notizen</label>
+        <textarea id="t_notes" placeholder="optional"></textarea>
+      </div>
+
+      <button class="btn" onclick="addTrade()">Trade speichern</button>
+    </div>
+
+    <div class="card">
+      <h2>Erfasste Trades (<span id="tradeCount">0</span>)</h2>
+      <div style="overflow-x:auto;">
+        <table id="tradeTable">
+          <thead>
+            <tr>
+              <th>Datum</th><th>Phase</th><th>Regime</th><th>Max RR erreicht</th><th>IVB</th><th>BigTrades</th><th>Qual.</th><th>Regel</th><th>Ergebnis</th><th>R</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tradeTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- AUSWERTUNG -->
+  <section class="view" id="view-auswertung">
+    <div class="card">
+      <h2>Phase filtern</h2>
+      <select id="statsPhaseFilter" style="max-width:280px;">
+        <option value="all">Alle Phasen</option>
+        <option value="backtest">1 · Backtest</option>
+        <option value="oos">2 · Out-of-Sample</option>
+        <option value="forward">3 · Forward-Sim</option>
+        <option value="live">4 · Live</option>
+      </select>
+    </div>
+    <div id="statsOutput"></div>
+  </section>
+
+  <!-- WALK-FORWARD -->
+  <section class="view" id="view-walkforward">
+    <div class="card">
+      <h2>Walk-Forward Split</h2>
+      <p style="font-size:0.82rem;color:var(--ink-soft);margin-bottom:14px;">
+        Teilt deine Backtest-Trades (Phase 1) an einem Stichtag. Regeln dürfen nur auf Basis der In-Sample-Seite entwickelt werden — die Out-of-Sample-Seite dient ausschließlich zur einmaligen Prüfung.
+      </p>
+      <div class="field" style="max-width:280px;">
+        <label>Stichtag (Split)</label>
+        <input type="date" id="wfSplitDate">
+      </div>
+      <button class="btn" onclick="renderWalkForward()">Split berechnen</button>
+    </div>
+    <div id="wfOutput"></div>
+  </section>
+
+</div>
+
+<script>
+const STORAGE_KEY = 'backtest_protokoll_v1';
+
+function loadState(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(raw){
+    try{ return JSON.parse(raw); }catch(e){}
+  }
+  return {
+    trades: [],
+    setups: [
+      {
+        id: 'setup_zero_gamma_default',
+        name: 'Zero-Gamma Level RR 1:3+',
+        desc: 'Entry an Levels im Zero-Gamma-Regime, Ziel RR 1:3 oder länger halten (Runner). Bestätigung durch Big Trades (Aggression/Absorption) nach Durchbruch des 30-Minuten-IVB — bevorzugt in diese Richtung handeln.'
+      }
+    ],
+    phaseConfig: {
+      backtest: { minTradesPerRegime: 50, minPF: 1.3 },
+      oos: { minTradesOOS: 30, maxPFDropPct: 25 },
+      forward: { minWeeks: 4, minTrades: 20 },
+      live: { minAdherencePct: 90, minTrades: 20 }
+    },
+    wfSplitDate: null
+  };
+}
+
+let state = loadState();
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+// ---------- Tabs ----------
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+    if(btn.dataset.view==='auswertung') renderStats();
+    if(btn.dataset.view==='walkforward') renderWalkForward();
+  });
+});
+
+// ---------- Setups ----------
+function renderSetupSelect(){
+  const sel = document.getElementById('t_setup');
+  sel.innerHTML = state.setups.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+}
+function renderSetupList(){
+  const el = document.getElementById('setupList');
+  if(state.setups.length===0){ el.innerHTML = '<div class="empty">Noch keine Setups definiert.</div>'; return; }
+  el.innerHTML = state.setups.map(s=>{
+    const n = state.trades.filter(t=>t.setup===s.id).length;
+    return `<div class="setup-card">
+      <h3>${escapeHtml(s.name)}</h3>
+      <p>${escapeHtml(s.desc)}</p>
+      <div class="setup-meta"><span>${n} Trades erfasst</span></div>
+    </div>`;
+  }).join('');
+}
+function addSetup(){
+  const name = document.getElementById('setupName').value.trim();
+  const desc = document.getElementById('setupDesc').value.trim();
+  if(!name){ alert('Bitte einen Namen für das Setup angeben.'); return; }
+  state.setups.push({ id:'setup_'+Date.now(), name, desc });
+  save();
+  document.getElementById('setupName').value='';
+  document.getElementById('setupDesc').value='';
+  renderSetupList(); renderSetupSelect();
+}
+
+// ---------- Trades ----------
+function addTrade(){
+  const date = document.getElementById('t_date').value;
+  if(!date){ alert('Bitte ein Datum angeben.'); return; }
+  const rmultRaw = document.getElementById('t_rmult').value;
+  if(rmultRaw===''){ alert('Bitte das R-Multiple angeben.'); return; }
+  const trade = {
+    id: 'trade_'+Date.now(),
+    date,
+    phase: document.getElementById('t_phase').value,
+    setup: document.getElementById('t_setup').value,
+    regime: document.getElementById('t_regime').value,
+    level: document.getElementById('t_level').value.trim(),
+    rrLevels: Array.from(document.querySelectorAll('#rrChecks input:checked')).map(c=>c.value),
+    ivbConfirmed: document.getElementById('t_ivb_confirmed').value,
+    ivbDir: document.getElementById('t_ivb_dir').value,
+    bigtrades: document.getElementById('t_bigtrades').value,
+    session: document.getElementById('t_session').value,
+    quality: document.getElementById('t_quality').value,
+    adherence: document.getElementById('t_adherence').value,
+    result: document.getElementById('t_result').value,
+    rmult: parseFloat(rmultRaw),
+    mae: document.getElementById('t_mae').value===''?null:parseFloat(document.getElementById('t_mae').value),
+    entrytime: document.getElementById('t_entrytime').value,
+    duration: document.getElementById('t_duration').value===''?null:parseInt(document.getElementById('t_duration').value),
+    leveldist: document.getElementById('t_leveldist').value===''?null:parseFloat(document.getElementById('t_leveldist').value),
+    ivbAlign: document.getElementById('t_ivb_align').value,
+    spx: document.getElementById('t_spx').value,
+    psych: document.getElementById('t_psych').value,
+    notes: document.getElementById('t_notes').value.trim()
+  };
+  state.trades.push(trade);
+  save();
+  document.getElementById('t_level').value='';
+  document.querySelectorAll('#rrChecks input:checked').forEach(c=>c.checked=false);
+  document.getElementById('t_rmult').value='';
+  document.getElementById('t_mae').value='';
+  document.getElementById('t_duration').value='';
+  document.getElementById('t_leveldist').value='';
+  document.getElementById('t_notes').value='';
+  renderTrades(); renderPhases(); renderSetupList();
+}
+function deleteTrade(id){
+  if(!confirm('Trade wirklich löschen?')) return;
+  state.trades = state.trades.filter(t=>t.id!==id);
+  save();
+  renderTrades(); renderPhases(); renderSetupList();
+}
+function setupName(id){
+  const s = state.setups.find(x=>x.id===id);
+  return s ? s.name : '—';
+}
+const phaseLabel = { backtest:'1 · Backtest', oos:'2 · OOS', forward:'3 · Forward', live:'4 · Live' };
+function renderTrades(){
+  const body = document.getElementById('tradeTableBody');
+  const sorted = [...state.trades].sort((a,b)=> b.date.localeCompare(a.date));
+  document.getElementById('tradeCount').textContent = state.trades.length;
+  if(sorted.length===0){
+    body.innerHTML = `<tr><td colspan="11" class="empty">Noch keine Trades erfasst.</td></tr>`;
+    return;
+  }
+  body.innerHTML = sorted.map(t=>`
+    <tr>
+      <td>${t.date}</td>
+      <td>${phaseLabel[t.phase]}</td>
+      <td>${regimeLabel(t.regime)}</td>
+      <td>${maxRR(t.rrLevels)}</td>
+      <td>${t.ivbConfirmed==='ja' ? t.ivbDir.toUpperCase() : '—'}</td>
+      <td>${t.bigtrades}</td>
+      <td>${t.quality}</td>
+      <td>${t.adherence==='ja' ? '✓' : '✕'}</td>
+      <td><span class="tag ${t.result}">${t.result}</span></td>
+      <td>${t.rmult>0?'+':''}${t.rmult}R</td>
+      <td><button class="del" onclick="deleteTrade('${t.id}')">löschen</button></td>
+    </tr>
+  `).join('');
+}
+function regimeLabel(r){
+  return {positive:'Positiv', negative:'Negativ', zero_gamma:'Zero-Gamma'}[r] || r;
+}
+const RR_ORDER = ['1:1','1:2','1:3','1:4','1:5','1:6+','runner'];
+function maxRR(levels){
+  if(!levels || levels.length===0) return '—';
+  let best = levels[0], bestIdx = RR_ORDER.indexOf(levels[0]);
+  levels.forEach(l=>{ const idx = RR_ORDER.indexOf(l); if(idx>bestIdx){ bestIdx=idx; best=l; } });
+  return best==='runner' ? 'Runner' : best;
+}
+
+// ---------- Stats engine ----------
+function computeStats(trades){
+  const n = trades.length;
+  if(n===0) return null;
+  const wins = trades.filter(t=>t.rmult>0);
+  const losses = trades.filter(t=>t.rmult<0);
+  const grossWin = wins.reduce((s,t)=>s+t.rmult,0);
+  const grossLoss = Math.abs(losses.reduce((s,t)=>s+t.rmult,0));
+  const pf = grossLoss>0 ? grossWin/grossLoss : (grossWin>0 ? Infinity : 0);
+  const expectancy = trades.reduce((s,t)=>s+t.rmult,0)/n;
+  const winRate = wins.length/n*100;
+  // max drawdown in R, chronological
+  const chrono = [...trades].sort((a,b)=>a.date.localeCompare(b.date));
+  let cum=0, peak=0, maxDD=0;
+  chrono.forEach(t=>{ cum+=t.rmult; if(cum>peak) peak=cum; const dd=peak-cum; if(dd>maxDD) maxDD=dd; });
+  const adherenceTrades = trades.filter(t=>t.adherence);
+  const adherencePct = adherenceTrades.length>0 ? adherenceTrades.filter(t=>t.adherence==='ja').length/adherenceTrades.length*100 : null;
+  return { n, pf, expectancy, winRate, maxDD, adherencePct };
+}
+function fmt(v, d=2){ return (v===Infinity) ? '∞' : (v===null||v===undefined||isNaN(v)) ? '—' : v.toFixed(d); }
+
+function renderStats(){
+  const filter = document.getElementById('statsPhaseFilter').value;
+  const trades = filter==='all' ? state.trades : state.trades.filter(t=>t.phase===filter);
+  const out = document.getElementById('statsOutput');
+  if(trades.length===0){ out.innerHTML = '<div class="empty">Keine Trades in dieser Auswahl.</div>'; return; }
+  const overall = computeStats(trades);
+
+  let html = `<div class="stat-grid">
+    <div class="stat-box"><div class="label">Trades</div><div class="val">${overall.n}</div></div>
+    <div class="stat-box"><div class="label">Profit Factor</div><div class="val ${overall.pf>=1?'pos':'neg'}">${fmt(overall.pf)}</div></div>
+    <div class="stat-box"><div class="label">Expectancy</div><div class="val ${overall.expectancy>=0?'pos':'neg'}">${fmt(overall.expectancy)}R</div></div>
+    <div class="stat-box"><div class="label">Win Rate</div><div class="val">${fmt(overall.winRate,1)}%</div></div>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-box"><div class="label">Max Drawdown</div><div class="val neg">${fmt(overall.maxDD)}R</div></div>
+    <div class="stat-box"><div class="label">Regel-Adherence</div><div class="val ${overall.adherencePct>=90?'pos':''}">${overall.adherencePct===null?'—':fmt(overall.adherencePct,1)+'%'}</div></div>
+  </div>`;
+
+  html += breakdownTable('Nach Regime', trades, 'regime', regimeLabel);
+  html += breakdownTable('Nach Session', trades, 'session', v=>v);
+  html += breakdownTable('Nach Setup-Qualität', trades, 'quality', v=>v);
+  html += breakdownTable('Nach Big-Trades Bestätigung', trades, 'bigtrades', v=>v);
+  html += breakdownTable('Nach IVB-Alignment', trades, 'ivbAlign', v=>({mit:'Mit IVB',gegen:'Gegen IVB',neutral:'Kein Signal'}[v]||v));
+  html += breakdownTable('Nach SPX-Kontext', trades, 'spx', v=>({bestaetigend:'Bestätigend',divergent:'Divergent',neutral:'Neutral'}[v]||v));
+  html += breakdownTable('Nach psychologischem Muster', trades, 'psych', v=>PSYCH_LABEL[v]||v);
+  html += rrLevelBreakdown(trades);
+  html += maeAnalysis(trades);
+
+  out.innerHTML = html;
+}
+const PSYCH_LABEL = {keins:'Keins', angst_exit:'Angst-Exit', frustration:'Frustration-Continuation', loss_chasing:'Loss-Chasing', fomo:'FOMO-Entry'};
+
+function maeAnalysis(trades){
+  const withMAE = trades.filter(t=>t.mae!==null && t.mae!==undefined && !isNaN(t.mae));
+  if(withMAE.length===0) return '';
+  const winners = withMAE.filter(t=>t.rmult>0);
+  const losers = withMAE.filter(t=>t.rmult<0);
+  const avg = arr => arr.length? arr.reduce((s,t)=>s+t.mae,0)/arr.length : null;
+  const maxWinnerMAE = winners.length? Math.max(...winners.map(t=>t.mae)) : null;
+
+  // Wie viele Gewinner wären bei engeren Stops ausgestoppt worden?
+  const stopLevels = [0.25,0.5,0.75,1.0];
+  const stopRows = stopLevels.map(s=>{
+    const killed = winners.filter(t=>t.mae>s).length;
+    const pct = winners.length? killed/winners.length*100 : 0;
+    return `<tr><td>Stop bei ${s}R</td><td>${killed} von ${winners.length}</td><td>${fmt(pct,1)}%</td></tr>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="breakdown-title">MAE-Analyse (Stop-Optimierung)</div>
+    <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px;">
+      <div class="stat-box"><div class="label">Ø MAE Gewinner</div><div class="val">${avg(winners)===null?'—':fmt(avg(winners))+'R'}</div></div>
+      <div class="stat-box"><div class="label">Ø MAE Verlierer</div><div class="val">${avg(losers)===null?'—':fmt(avg(losers))+'R'}</div></div>
+      <div class="stat-box"><div class="label">Max MAE Gewinner</div><div class="val">${maxWinnerMAE===null?'—':fmt(maxWinnerMAE)+'R'}</div></div>
+    </div>
+    <p style="font-size:0.78rem;color:var(--ink-soft);margin-bottom:10px;">Gewinner-Trades, die bei engerem Stop ausgestoppt worden wären. Zeigt, ob dein Stop zu eng oder unnötig weit sitzt.</p>
+    <table><thead><tr><th>Stop-Distanz</th><th>Gewinner ausgestoppt</th><th>Anteil</th></tr></thead>
+    <tbody>${stopRows}</tbody></table>
+  </div>`;
+}
+function rrLevelBreakdown(trades){
+  const withRR = trades.filter(t=>t.rrLevels && t.rrLevels.length>0);
+  if(withRR.length===0) return '';
+  const total = withRR.length;
+  const rows = RR_ORDER.map(level=>{
+    const reached = withRR.filter(t=>t.rrLevels.includes(level)).length;
+    const pct = reached/total*100;
+    return `<tr><td>${level==='runner'?'Runner (offen getrailt)':level}</td><td>${reached}</td><td>${fmt(pct,1)}%</td></tr>`;
+  }).join('');
+  return `<div class="card">
+    <div class="breakdown-title">Wie weit wären die Trades gelaufen?</div>
+    <p style="font-size:0.78rem;color:var(--ink-soft);margin-bottom:10px;">Anteil der Trades (von ${total} mit RR-Angabe), die das jeweilige Level mindestens erreicht haben. Hilft bei der Wahl des optimalen RR-Ziels.</p>
+    <table><thead><tr><th>RR-Level</th><th>Trades erreicht</th><th>Anteil</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+  </div>`;
+}
+function breakdownTable(title, trades, key, labelFn){
+  const groups = {};
+  trades.forEach(t=>{ if(t[key]===undefined||t[key]===null||t[key]==='') return; (groups[t[key]] = groups[t[key]]||[]).push(t); });
+  const keys = Object.keys(groups);
+  if(keys.length===0) return '';
+  let rows = keys.map(k=>{
+    const st = computeStats(groups[k]);
+    return `<tr>
+      <td>${labelFn(k)}</td><td>${st.n}</td>
+      <td class="${st.pf>=1?'':''}">${fmt(st.pf)}</td>
+      <td>${fmt(st.expectancy)}R</td>
+      <td>${fmt(st.winRate,1)}%</td>
+      <td>${fmt(st.maxDD)}R</td>
+    </tr>`;
+  }).join('');
+  return `<div class="card">
+    <div class="breakdown-title">${title}</div>
+    <table><thead><tr><th></th><th>Trades</th><th>PF</th><th>Expectancy</th><th>Win Rate</th><th>Max DD</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+  </div>`;
+}
+
+document.getElementById('statsPhaseFilter').addEventListener('change', renderStats);
+
+// ---------- Walk-Forward ----------
+function renderWalkForward(){
+  const split = document.getElementById('wfSplitDate').value || state.wfSplitDate;
+  if(state.wfSplitDate !== split){ state.wfSplitDate = split; save(); }
+  const out = document.getElementById('wfOutput');
+  const backtestTrades = state.trades.filter(t=>t.phase==='backtest');
+  if(!split){
+    out.innerHTML = backtestTrades.length===0
+      ? '<div class="empty">Noch keine Backtest-Trades vorhanden.</div>'
+      : '<div class="empty">Stichtag wählen, um den Split zu berechnen.</div>';
+    return;
+  }
+  const inSample = backtestTrades.filter(t=>t.date < split);
+  const outSample = backtestTrades.filter(t=>t.date >= split);
+  const isStats = computeStats(inSample);
+  const oosStats = computeStats(outSample);
+
+  const cfg = state.phaseConfig.oos;
+  const minOOS = cfg.minTradesOOS;
+  const maxDrop = cfg.maxPFDropPct;
+  let dropPct = null, dropOk = null;
+  if(isStats && oosStats && isFinite(isStats.pf) && isStats.pf>0){
+    dropPct = (isStats.pf - oosStats.pf) / isStats.pf * 100;
+    dropOk = dropPct <= maxDrop;
+  }
+
+  out.innerHTML = `
+  <div class="grid2">
+    <div class="card">
+      <h2>In-Sample (vor ${split})</h2>
+      ${isStats ? statBlock(isStats) : '<div class="empty">Keine Trades vor Stichtag.</div>'}
+    </div>
+    <div class="card">
+      <h2>Out-of-Sample (ab ${split})</h2>
+      ${oosStats ? statBlock(oosStats) : '<div class="empty">Keine Trades ab Stichtag.</div>'}
+    </div>
+  </div>
+  <div class="card">
+    <h2>Walk-Forward Gate</h2>
+    <div class="criteria">
+      <div class="criterion ${oosStats && oosStats.n>=minOOS?'met':'unmet'}">
+        <span>Mindestens ${minOOS} Trades im Out-of-Sample</span>
+        <span class="cur">${oosStats?oosStats.n:0} / ${minOOS}</span>
+      </div>
+      <div class="criterion ${dropOk?'met':'unmet'}">
+        <span>PF-Einbruch OOS vs. In-Sample ≤ ${maxDrop}%</span>
+        <span class="cur">${dropPct===null?'—':fmt(dropPct,1)+'%'}</span>
+      </div>
+    </div>
+    ${(!dropOk && dropPct!==null) ? '<div class="gate-note">PF bricht im Out-of-Sample stärker ein als toleriert — Hinweis auf Overfitting im In-Sample-Zeitraum. Regeln überarbeiten statt Split verschieben.</div>' : ''}
+  </div>`;
+}
+function statBlock(st){
+  return `<div class="stat-grid" style="grid-template-columns:repeat(2,1fr);">
+    <div class="stat-box"><div class="label">Trades</div><div class="val">${st.n}</div></div>
+    <div class="stat-box"><div class="label">PF</div><div class="val ${st.pf>=1?'pos':'neg'}">${fmt(st.pf)}</div></div>
+    <div class="stat-box"><div class="label">Expectancy</div><div class="val">${fmt(st.expectancy)}R</div></div>
+    <div class="stat-box"><div class="label">Win Rate</div><div class="val">${fmt(st.winRate,1)}%</div></div>
+  </div>`;
+}
+document.getElementById('wfSplitDate').addEventListener('change', renderWalkForward);
+
+// ---------- Phase gates ----------
+function regimeCounts(trades){
+  const c = { positive:0, negative:0, zero_gamma:0 };
+  trades.forEach(t=>{ if(c[t.regime]!==undefined) c[t.regime]++; });
+  return c;
+}
+function weeksSpanned(trades){
+  if(trades.length===0) return 0;
+  const dates = trades.map(t=>new Date(t.date).getTime());
+  const spanMs = Math.max(...dates) - Math.min(...dates);
+  return spanMs / (1000*60*60*24*7);
+}
+function renderPhases(){
+  const cfg = state.phaseConfig;
+  const backtestTrades = state.trades.filter(t=>t.phase==='backtest');
+  const oosTrades = state.trades.filter(t=>t.phase==='oos');
+  const forwardTrades = state.trades.filter(t=>t.phase==='forward');
+  const liveTrades = state.trades.filter(t=>t.phase==='live');
+
+  // Phase 1
+  const rc = regimeCounts(backtestTrades);
+  const btStats = computeStats(backtestTrades);
+  const p1_regimeOk = rc.positive>=cfg.backtest.minTradesPerRegime && rc.negative>=cfg.backtest.minTradesPerRegime;
+  const p1_pfOk = btStats && btStats.pf >= cfg.backtest.minPF;
+  const p1_unlocked = p1_regimeOk && p1_pfOk;
+
+  // Phase 2 (walk-forward gate, using wfSplitDate if set)
+  let p2_unlocked = false, p2_note = null;
+  if(state.wfSplitDate){
+    const inS = backtestTrades.filter(t=>t.date < state.wfSplitDate);
+    const outS = backtestTrades.filter(t=>t.date >= state.wfSplitDate);
+    const isS = computeStats(inS), osS = computeStats(outS);
+    const minOOS = cfg.oos.minTradesOOS;
+    const oosCountOk = osS && osS.n>=minOOS;
+    let dropOk = false;
+    if(isS && osS && isFinite(isS.pf) && isS.pf>0){
+      const dropPct = (isS.pf - osS.pf)/isS.pf*100;
+      dropOk = dropPct <= cfg.oos.maxPFDropPct;
+    }
+    p2_unlocked = oosCountOk && dropOk;
+  } else {
+    p2_note = 'Stichtag im Walk-Forward-Tab setzen, um dieses Tor zu prüfen.';
+  }
+
+  // Phase 3
+  const p3_weeksOk = weeksSpanned(forwardTrades) >= cfg.forward.minWeeks;
+  const p3_tradesOk = forwardTrades.length >= cfg.forward.minTrades;
+  const p3_unlocked = p3_weeksOk && p3_tradesOk;
+
+  // Phase 4
+  const liveStats = computeStats(liveTrades);
+  const p4_adherenceOk = liveStats && liveStats.adherencePct!==null && liveStats.adherencePct >= cfg.live.minAdherencePct;
+  const p4_tradesOk = liveTrades.length >= cfg.live.minTrades;
+  const p4_unlocked = p4_adherenceOk && p4_tradesOk;
+
+  const phases = [
+    {
+      key:'backtest', num:'PHASE 1', title:'Backtest',
+      desc:'Historischer, regelbasierter Test. Getrennte Auswertung nach Regime — kein gepoolter Durchschnitt.',
+      unlocked: p1_unlocked,
+      criteria: [
+        { label:`Positiv-Regime: ≥ ${cfg.backtest.minTradesPerRegime} Trades`, ok: rc.positive>=cfg.backtest.minTradesPerRegime, cur:`${rc.positive} / ${cfg.backtest.minTradesPerRegime}`, value:rc.positive, max:cfg.backtest.minTradesPerRegime },
+        { label:`Negativ-Regime: ≥ ${cfg.backtest.minTradesPerRegime} Trades`, ok: rc.negative>=cfg.backtest.minTradesPerRegime, cur:`${rc.negative} / ${cfg.backtest.minTradesPerRegime}`, value:rc.negative, max:cfg.backtest.minTradesPerRegime },
+        { label:`Profit Factor ≥ ${cfg.backtest.minPF}`, ok: !!p1_pfOk, cur: btStats?fmt(btStats.pf):'—', value: btStats?Math.min(btStats.pf,cfg.backtest.minPF):0, max:cfg.backtest.minPF }
+      ]
+    },
+    {
+      key:'oos', num:'PHASE 2', title:'Out-of-Sample / Walk-Forward',
+      desc:'Regeln nur auf In-Sample entwickeln. Out-of-Sample wird nur einmal geprüft, nie zum Nachjustieren genutzt.',
+      unlocked: p2_unlocked,
+      note: p2_note,
+      criteria: state.wfSplitDate ? [
+        { label:`≥ ${cfg.oos.minTradesOOS} Trades im Out-of-Sample`, ok: p2_unlocked || false, cur:'siehe Walk-Forward-Tab' },
+        { label:`PF-Einbruch ≤ ${cfg.oos.maxPFDropPct}%`, ok: p2_unlocked || false, cur:'siehe Walk-Forward-Tab' }
+      ] : []
+    },
+    {
+      key:'forward', num:'PHASE 3', title:'Forward-Sim (kein Kapitalrisiko)',
+      desc:'Echtzeit-Ausführung der exakt gleichen Regeln, ohne echtes Kapital. Prüft Slippage, Fill-Timing, Ausführbarkeit.',
+      unlocked: p3_unlocked,
+      criteria: [
+        { label:`≥ ${cfg.forward.minWeeks} Wochen Zeitraum`, ok: p3_weeksOk, cur:`${fmt(weeksSpanned(forwardTrades),1)} / ${cfg.forward.minWeeks} Wochen`, value:weeksSpanned(forwardTrades), max:cfg.forward.minWeeks },
+        { label:`≥ ${cfg.forward.minTrades} Trades`, ok: p3_tradesOk, cur:`${forwardTrades.length} / ${cfg.forward.minTrades}`, value:forwardTrades.length, max:cfg.forward.minTrades }
+      ]
+    },
+    {
+      key:'live', num:'PHASE 4', title:'Live (Small Size)',
+      desc:'Kleinste Positionsgröße, echtes Kapital. Regel-Adherence ist die Metrik — nicht P&L.',
+      unlocked: p4_unlocked,
+      criteria: [
+        { label:`Regel-Adherence ≥ ${cfg.live.minAdherencePct}%`, ok: !!p4_adherenceOk, cur: liveStats && liveStats.adherencePct!==null ? fmt(liveStats.adherencePct,1)+'%' : '—', value: liveStats && liveStats.adherencePct!==null ? liveStats.adherencePct : 0, max:cfg.live.minAdherencePct },
+        { label:`≥ ${cfg.live.minTrades} Trades`, ok: p4_tradesOk, cur:`${liveTrades.length} / ${cfg.live.minTrades}`, value:liveTrades.length, max:cfg.live.minTrades }
+      ]
+    }
+  ];
+
+  // Sequential gating: a phase can only ever show "erreichbar" if the prior phase is unlocked
+  let priorUnlocked = true;
+  let currentPhaseLabel = 'PHASE 1 · BACKTEST';
+  let foundCurrent = false;
+  const grid = document.getElementById('phaseGrid');
+  grid.innerHTML = phases.map((p,idx)=>{
+    const sequentiallyOpen = priorUnlocked;
+    const stateClass = p.unlocked ? 'unlocked' : (sequentiallyOpen ? 'current' : 'locked');
+    if(!p.unlocked && sequentiallyOpen && !foundCurrent){
+      currentPhaseLabel = p.num+' · '+p.title.split('(')[0].trim().toUpperCase();
+      foundCurrent = true;
+    }
+    priorUnlocked = priorUnlocked && p.unlocked;
+    const critHtml = p.criteria.length ? `<div class="criteria">${p.criteria.map(c=>{
+      const pct = (c.max>0) ? Math.min(100, Math.max(0,(c.value/c.max)*100)) : (c.ok?100:0);
+      return `
+      <div class="criterion ${c.ok?'met':'unmet'}">
+        <div class="crit-row">
+          <span>${c.label}</span>
+          <span><span class="status">${c.ok?'✓ erfüllt':'offen'}</span> <span class="cur">${c.cur}</span></span>
+        </div>
+        <div class="crit-bar"><div class="crit-bar-fill" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join('')}</div>` : '';
+    return `<div class="phase-card ${stateClass}">
+      <div class="phase-head">
+        <div>
+          <div class="phase-num">${p.num}${!sequentiallyOpen?' · GESPERRT DURCH VORPHASE':''}</div>
+          <div class="phase-title">${p.title}</div>
+        </div>
+        <div class="seal ${p.unlocked?'unlocked':'locked'}">${p.unlocked?'Offen':'Verriegelt'}</div>
+      </div>
+      <div class="phase-desc">${p.desc}</div>
+      ${critHtml}
+      ${p.note ? `<div class="gate-note">${p.note}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  if(phases.every(p=>p.unlocked)) currentPhaseLabel = 'ALLE PHASEN BESTANDEN';
+  document.getElementById('currentPhaseBadge').textContent = currentPhaseLabel;
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// ---------- Init ----------
+document.getElementById('t_date').valueAsDate = new Date();
+renderSetupSelect();
+renderSetupList();
+renderTrades();
+renderPhases();
+</script>
+</body>
+</html>
